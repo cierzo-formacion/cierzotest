@@ -1053,7 +1053,8 @@ function STest({ user, setView }) {
                 <span className={"bg2 " + statusClass}>{statusLabel}</span>
                 <button className="b bg bsm" onClick={function() { togB(rq.id); }}>{isB(rq.id) ? <IC.BmF /> : <IC.Bm />}</button>
                 {!alreadyReported && (
-<button className="b bg bsm" style={{ color: "var(--err)" }} onClick={function() { setShowReport(rq.id); }}><IC.Flag /> Reportar</button>                )}
+                  <button className="b bg bsm" style={{ color: "var(--err)" }} onClick={function() { setShowReport(rq.id); }} title="Reportar pregunta errónea"><IC.Flag /></button>
+                )}
                 {alreadyReported && (
                   <span style={{ fontSize: 11, color: "var(--tx3)", fontStyle: "italic" }}>Reportada</span>
                 )}
@@ -1093,6 +1094,7 @@ function STest({ user, setView }) {
                       <label>¿Qué problema tiene la pregunta?</label>
                       <textarea value={reportText} onChange={function(e) { setReportText(e.target.value); }} placeholder="Ej: La respuesta correcta debería ser la B según el Art. 27 CE..." rows={4} />
                     </div>
+                    <p style={{ fontSize: 12, color: "var(--tx3)", marginBottom: 16 }}>Se notificará a test@cierzoformacion.com</p>
                     <div className="ma">
                       <button className="b bs" onClick={function() { setShowReport(null); setReportText(""); }}>Cancelar</button>
                       <button className="b bdanger" onClick={function() { sendReport(rq.id); }} disabled={!reportText.trim()}><IC.Flag /> Enviar reporte</button>
