@@ -103,7 +103,7 @@ const IC = {
 
 /* ====== CSS ====== */
 const CSS = `@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-:root{--accent:#2563eb;--accent-l:#3b82f6;--accent-s:#dbeafe;--accent-bg:#eff6ff;--ok:#059669;--ok-s:#d1fae5;--err:#dc2626;--err-s:#fee2e2;--warn:#d97706;--warn-s:#fef3c7;--bg:#f8fafc;--sf:#fff;--sf2:#f1f5f9;--bd:#e2e8f0;--bd2:#cbd5e1;--tx:#0f172a;--tx2:#475569;--tx3:#94a3b8;--r:10px;--rs:6px;--rl:14px;--f:'DM Sans',sans-serif;--m:'JetBrains Mono',monospace}
+:root{--accent:#1A6B8A;--accent-l:#2BB5C6;--accent-s:#D4F1F7;--accent-bg:#EBF8FB;--ok:#059669;--ok-s:#d1fae5;--err:#dc2626;--err-s:#fee2e2;--warn:#d97706;--warn-s:#fef3c7;--bg:#F4F8FA;--sf:#fff;--sf2:#EDF2F6;--bd:#D8E2EA;--bd2:#B8C8D6;--tx:#0F1E2E;--tx2:#4A6275;--tx3:#8CA3B5;--r:10px;--rs:6px;--rl:14px;--f:'DM Sans',sans-serif;--m:'JetBrains Mono',monospace}--ok:#059669;--ok-s:#d1fae5;--err:#dc2626;--err-s:#fee2e2;--warn:#d97706;--warn-s:#fef3c7;--bg:#f8fafc;--sf:#fff;--sf2:#f1f5f9;--bd:#e2e8f0;--bd2:#cbd5e1;--tx:#0f172a;--tx2:#475569;--tx3:#94a3b8;--r:10px;--rs:6px;--rl:14px;--f:'DM Sans',sans-serif;--m:'JetBrains Mono',monospace}
 *{margin:0;padding:0;box-sizing:border-box}body,#root{font-family:var(--f);background:var(--bg);color:var(--tx);min-height:100vh}
 .lp{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1e3a5f,#0f172a);padding:20px}
 .lc{background:var(--sf);border-radius:20px;padding:48px 40px;width:100%;max-width:420px;box-shadow:0 25px 60px rgba(0,0,0,.3)}
@@ -206,7 +206,7 @@ function Login({ onLogin }) {
   return (
     <div className="lp">
       <div className="lc fi">
-        <div className="ll"><IC.Logo /><span>CierzoTest</span></div>
+        <div className="ll"><img src="/logo-cierzo.png" alt="CierzoTest" style={{height:60}} /></div>
         <h1>Bienvenido</h1>
         <p>Accede a tu plataforma de oposiciones</p>
         {error && <div className="le"><IC.Warn />{error}</div>}
@@ -228,6 +228,7 @@ function Login({ onLogin }) {
           Demo: <b>admin / admin123</b> | <b>alumno1 / 1234</b> | <b>alumno2 / 1234</b>
         </p>
       </div>
+      <p style={{marginTop:16,color:"rgba(255,255,255,0.4)",fontSize:11,textAlign:"center"}}>Hecho con <span style={{color:"#E25555"}}>&#10084;</span> por Cierzo Formación</p>
 
       {showRecovery && (
         <div className="mo" onClick={function() { setShowRecovery(false); }}>
@@ -267,7 +268,7 @@ function Side({ user, view, setView, logout }) {
 
   return (
     <div className="sb">
-      <div className="sbl"><IC.Logo /><span>CierzoTest</span></div>
+      <div className="sbl"><img src="/logo-cierzo.png" alt="Cierzo" style={{height:36,filter:"brightness(0) invert(1)",opacity:0.9}} /></div>
       <div className="sbn">
         {nav.map(function(item) {
           var id = item[0], label = item[1], Icon = item[2];
