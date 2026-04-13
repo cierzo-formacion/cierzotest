@@ -225,11 +225,9 @@ function Login({ onLogin }) {
           <button type="button" className="b bp bw" onClick={handleClick}>Iniciar sesión</button>
         </div>
         <p style={{ marginTop: 20, fontSize: 12, color: "var(--tx3)", textAlign: "center", lineHeight: 1.6 }}>
-          Demo: <b>admin / admin123</b> | <b>alumno1 / 1234</b> | <b>alumno2 / 1234</b>
-        </p>
+<p style={{marginTop:20,color:"var(--tx3)",fontSize:13,textAlign:"center"}}>Hecho con <span style={{color:"#E25555"}}>&#10084;</span> por Cierzo Formación</p>        </p>
       </div>
-      <p style={{marginTop:16,color:"rgba(255,255,255,0.4)",fontSize:11,textAlign:"center"}}>Hecho con <span style={{color:"#E25555"}}>&#10084;</span> por Cierzo Formación</p>
-
+     
       {showRecovery && (
         <div className="mo" onClick={function() { setShowRecovery(false); }}>
           <div className="md fi" onClick={function(e) { e.stopPropagation(); }}>
