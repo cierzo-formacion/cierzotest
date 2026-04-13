@@ -112,6 +112,7 @@ const IC = {
   Gear: () => <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="10" cy="10" r="2.5" /><path d="M10 1.5v2M10 16.5v2M1.5 10h2M16.5 10h2M3.4 3.4l1.4 1.4M15.2 15.2l1.4 1.4M3.4 16.6l1.4-1.4M15.2 4.8l1.4-1.4" strokeLinecap="round" /></svg>,
   Flag: () => <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 2v12M3 2h8l-2 3 2 3H3" strokeLinecap="round" strokeLinejoin="round" /></svg>,
   Lock: () => <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="7" width="10" height="7" rx="1.5" /><path d="M5 7V5a3 3 0 016 0v2" strokeLinecap="round" /></svg>,
+  Bot: () => <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="6" width="12" height="9" rx="2" /><circle cx="7" cy="10.5" r="1" fill="currentColor" stroke="none" /><circle cx="11" cy="10.5" r="1" fill="currentColor" stroke="none" /><path d="M9 3v3M6 3h6" strokeLinecap="round" /><path d="M1 10h2M15 10h2" strokeLinecap="round" /></svg>,
 };
 
 /* ====== CSS ====== */
@@ -197,7 +198,8 @@ td{padding:12px 14px;font-size:14px;border-bottom:1px solid var(--bd)}tr:hover t
 .toggle.on .toggle-knob{left:22px}.toggle.off .toggle-knob{left:2px}
 .report-badge{position:relative}.report-badge .rbcount{position:absolute;top:-6px;right:-6px;background:var(--err);color:#fff;font-size:10px;font-weight:700;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center}
 .success-msg{display:flex;align-items:center;gap:8px;padding:12px 16px;background:var(--ok-s);border:1px solid #6ee7b7;border-radius:var(--rs);color:var(--ok);font-size:14px;font-weight:500;margin-bottom:16px}
-@media(max-width:768px){.sb{display:none}.mc{margin-left:0;padding:16px}.sg{grid-template-columns:1fr 1fr}.g2{grid-template-columns:1fr}.tg{grid-template-columns:1fr}.qc{padding:20px}.lc{padding:32px 24px}}`;
+@media(max-width:768px){.sb{display:none}.mc{margin-left:0;padding:16px}.sg{grid-template-columns:1fr 1fr}.g2{grid-template-columns:1fr}.tg{grid-template-columns:1fr}.qc{padding:20px}.lc{padding:32px 24px}}
+@keyframes pulse-ai{0%,100%{opacity:1}50%{opacity:.5}}.ai-loading{animation:pulse-ai 1.5s infinite}`;
 
 /* ====== LOGIN ====== */
 function Login({ onLogin }) {
@@ -865,6 +867,35 @@ function STest({ user, setView }) {
   const [showReport, setShowReport] = useState(null);
   const [reportText, setReportText] = useState("");
   const [reportSent, setReportSent] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiResponses, setAiResponses] = useState({});
+
+  function askGemini(question, selectedAnswer, correctAnswer, justification, idx) {
+    if (aiResponses[idx] || aiLoading) return;
+    setAiLoading(true);
+    var prompt = "Eres un tutor experto en oposiciones españolas. Un alumno ha fallado esta pregunta de test. Explícale de forma clara, breve (máximo 4-5 frases) y didáctica por qué la respuesta correcta es la que es y por qué la que eligió es incorrecta. Usa un tono cercano y motivador.\n\n" +
+      "PREGUNTA: " + question.text + "\n" +
+      "OPCIONES: " + question.options.map(function(o, i) { return String.fromCharCode(65 + i) + ") " + o; }).join(" | ") + "\n" +
+      "RESPUESTA DEL ALUMNO: " + (selectedAnswer !== undefined ? String.fromCharCode(65 + selectedAnswer) + ") " + question.options[selectedAnswer] : "En blanco") + "\n" +
+      "RESPUESTA CORRECTA: " + String.fromCharCode(65 + question.correct) + ") " + question.options[question.correct] + "\n" +
+      "JUSTIFICACIÓN OFICIAL: " + (justification || "No disponible");
+
+    fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + process.env.REACT_APP_GEMINI_KEY, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+    })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      var text = "";
+      try { text = data.candidates[0].content.parts[0].text; } catch(e) { text = "No se pudo obtener la explicación. Inténtalo de nuevo."; }
+      setAiResponses(function(prev) { var n = Object.assign({}, prev); n[idx] = text; return n; });
+    })
+    .catch(function() {
+      setAiResponses(function(prev) { var n = Object.assign({}, prev); n[idx] = "Error de conexión. Comprueba tu conexión a internet e inténtalo de nuevo."; return n; });
+    })
+    .finally(function() { setAiLoading(false); });
+  }
 
   useEffect(function() {
     if (step === "test" && t0) {
@@ -1053,7 +1084,7 @@ function STest({ user, setView }) {
                 <span className={"bg2 " + statusClass}>{statusLabel}</span>
                 <button className="b bg bsm" onClick={function() { togB(rq.id); }}>{isB(rq.id) ? <IC.BmF /> : <IC.Bm />}</button>
                 {!alreadyReported && (
-                  <button className="b bg bsm" style={{ color: "var(--err)" }} onClick={function() { setShowReport(rq.id); }} title="Reportar pregunta errónea"><IC.Flag /></button>
+                  <button className="b bg bsm" style={{ color: "var(--err)" }} onClick={function() { setShowReport(rq.id); }}><IC.Flag /> Reportar</button>
                 )}
                 {alreadyReported && (
                   <span style={{ fontSize: 11, color: "var(--tx3)", fontStyle: "italic" }}>Reportada</span>
@@ -1070,6 +1101,23 @@ function STest({ user, setView }) {
               })}
             </div>
             {(!isRight || (isDoubt && !answered)) && rq.justification ? <div className="jb"><b>Justificación:</b> {rq.justification}</div> : null}
+{(!isRight || (isDoubt && !answered)) && (
+              <div style={{ marginTop: 14 }}>
+                                {!aiResponses[ri] ? (
+                  <button className="b bp bsm" onClick={function() { askGemini(rq, ua, rq.correct, rq.justification, ri); }} disabled={aiLoading} style={{ background: "linear-gradient(135deg, #4285F4, #34A853)", border: "none" }}>
+                    <IC.Bot /> {aiLoading ? "Pensando..." : "Explicar con IA"}
+                  </button>
+                ) : (
+                  <div className="fi" style={{ background: "linear-gradient(135deg, #EEF4FF, #F0FFF4)", border: "1px solid #C6DBEF", borderRadius: "var(--rs)", padding: "16px 18px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                      <IC.Bot />
+                      <span style={{ fontSize: 13, fontWeight: 700, color: "#4285F4" }}>Tutor IA</span>
+                    </div>
+                    <div style={{ fontSize: 14, lineHeight: 1.7, color: "var(--tx)", whiteSpace: "pre-wrap" }}>{aiResponses[ri]}</div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <div className="f g8 jb2"><button className="b bs" disabled={ri === 0} onClick={function() { setRi(ri - 1); }}>Anterior</button><button className="b bs" disabled={ri === tqs.length - 1} onClick={function() { setRi(ri + 1); }}>Siguiente</button></div>
 
@@ -1094,7 +1142,6 @@ function STest({ user, setView }) {
                       <label>¿Qué problema tiene la pregunta?</label>
                       <textarea value={reportText} onChange={function(e) { setReportText(e.target.value); }} placeholder="Ej: La respuesta correcta debería ser la B según el Art. 27 CE..." rows={4} />
                     </div>
-                    <p style={{ fontSize: 12, color: "var(--tx3)", marginBottom: 16 }}>Se notificará a test@cierzoformacion.com</p>
                     <div className="ma">
                       <button className="b bs" onClick={function() { setShowReport(null); setReportText(""); }}>Cancelar</button>
                       <button className="b bdanger" onClick={function() { sendReport(rq.id); }} disabled={!reportText.trim()}><IC.Flag /> Enviar reporte</button>
