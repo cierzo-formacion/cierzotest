@@ -584,6 +584,7 @@ function STest({ user, setView }) {
   const [tqs, setTqs] = useState([]);
   const [ci, setCi] = useState(0);
   const [ans, setAns] = useState({});
+  const [doubts, setDoubts] = useState({});
   const [t0, setT0] = useState(null);
   const [el, setEl] = useState(0);
   const [done, setDone] = useState(false);
@@ -618,16 +619,46 @@ function STest({ user, setView }) {
     var pool = getPool();
     var sh = pool.slice().sort(function() { return Math.random() - 0.5; }).slice(0, nq);
     if (!sh.length) return;
-    setTqs(sh); setAns({}); setCi(0); setT0(Date.now()); setEl(0); setStep("test");
+    setTqs(sh); setAns({}); setDoubts({}); setCi(0); setT0(Date.now()); setEl(0); setStep("test");
   }
 
-  function finish() {
+function finish() {
     var tt2 = Math.floor((Date.now() - t0) / 1000);
-    var c = 0; tqs.forEach(function(q, i) { if (ans[i] === q.correct) c++; });
-    var sc = Math.round((c / tqs.length) * 100);
+    var correct = 0;
+    var incorrect = 0;
+    var blank = 0;
+    var doubtOk = 0;
+    var doubtFail = 0;
+    var doubtBlank = 0;
+    tqs.forEach(function(q, i) {
+      var answered = ans[i] !== undefined;
+      var isRight = ans[i] === q.correct;
+      var isDoubt = !!doubts[i];
+      if (isDoubt) {
+        if (!answered) doubtBlank++;
+        else if (isRight) doubtOk++;
+        else doubtFail++;
+      } else {
+        if (!answered) blank++;
+        else if (isRight) correct++;
+        else incorrect++;
+      }
+    });
+    var sc = Math.round((correct + doubtOk) / tqs.length * 100);
     var tops = []; tqs.forEach(function(q) { if (tops.indexOf(q.topic) < 0) tops.push(q.topic); });
-    var details = tqs.map(function(q, i) { return { questionId: q.id, topic: q.topic, selected: ans[i], correct: q.correct, isCorrect: ans[i] === q.correct }; });
-    setResults(results.concat([{ id: uid(), userId: user.id, opoId: so, date: new Date().toISOString(), score: sc, correct: c, incorrect: tqs.length - c, totalQuestions: tqs.length, timeSeconds: tt2, topics: tops, details: details }]));
+    var details = tqs.map(function(q, i) {
+      var answered = ans[i] !== undefined;
+      var isRight = ans[i] === q.correct;
+      var isDoubt = !!doubts[i];
+      var status = "incorrect";
+      if (isDoubt && !answered) status = "doubt-blank";
+      else if (isDoubt && isRight) status = "doubt-ok";
+      else if (isDoubt && !isRight) status = "doubt-fail";
+      else if (!answered) status = "blank";
+      else if (isRight) status = "correct";
+      return { questionId: q.id, topic: q.topic, selected: ans[i], correct: q.correct, isCorrect: isRight, doubt: isDoubt, status: status };
+    });
+    setResults(results.concat([{ id: uid(), userId: user.id, opoId: so, date: new Date().toISOString(), score: sc, correct: correct, incorrect: incorrect, blank: blank, doubtOk: doubtOk, doubtFail: doubtFail, doubtBlank: doubtBlank, totalQuestions: tqs.length, timeSeconds: tt2, topics: tops, details: details }]));
     var today = new Date().toDateString();
     setUsers(users.map(function(u) {
       if (u.id !== user.id) return u;
@@ -638,7 +669,6 @@ function STest({ user, setView }) {
     }));
     setDone(true);
   }
-
   function togB(id) { var k = user.id + "_" + id; setBookmarks(bookmarks.indexOf(k) >= 0 ? bookmarks.filter(function(b) { return b !== k; }) : bookmarks.concat([k])); }
   function isB(id) { return bookmarks.indexOf(user.id + "_" + id) >= 0; }
 
@@ -666,7 +696,7 @@ function STest({ user, setView }) {
           {so && (
             <div className="cd fi">
               <div className="ct mb16">3. Preguntas</div>
-              <div className="f g8 fw">{[5, 10, 15, 20].map(function(n) { return <button key={n} className={"b " + (nq === n ? "bp" : "bs") + " bsm"} onClick={function() { setNq(n); }}>{n}</button>; })}</div>
+              <div className="f g8 fw">{[25, 50, 75, 100, 125, 150].map(function(n) { return <button key={n} className={"b " + (nq === n ? "bp" : "bs") + " bsm"} onClick={function() { setNq(n); }}>{n}</button>; })}</div>
               <p style={{ marginTop: 12, fontSize: 13, color: "var(--tx3)" }}>{av} disponibles</p>
               <div style={{ marginTop: 20 }}><button className="b bp" onClick={start} disabled={!av}>Comenzar ({Math.min(nq, av)})</button></div>
             </div>
@@ -680,28 +710,42 @@ function STest({ user, setView }) {
   var ac = Object.keys(ans).length;
 
   // RESULTS
-  if (done) {
-    var c2 = 0; tqs.forEach(function(qq, i) { if (ans[i] === qq.correct) c2++; });
-    var sc2 = Math.round((c2 / tqs.length) * 100);
+if (done) {
+    var lastRes = results[results.length - 1] || {};
+    var sc2 = lastRes.score || 0;
+    var nCorrect = lastRes.correct || 0;
+    var nIncorrect = lastRes.incorrect || 0;
+    var nBlank = lastRes.blank || 0;
+    var nDoubtOk = lastRes.doubtOk || 0;
+    var nDoubtFail = lastRes.doubtFail || 0;
+    var nDoubtBlank = lastRes.doubtBlank || 0;
 
     if (ri !== null) {
-      var rq = tqs[ri]; var ua = ans[ri]; var ok = ua === rq.correct;
+      var rq = tqs[ri]; var ua = ans[ri]; var isDoubt = !!doubts[ri]; var answered = ua !== undefined; var isRight = ua === rq.correct;
+      var statusLabel = "✗ Incorrecta"; var statusClass = "bgd";
+      if (isDoubt && !answered) { statusLabel = "⚠ Dudosa (en blanco)"; statusClass = "bgw"; }
+      else if (isDoubt && isRight) { statusLabel = "⚠ Dudosa (correcta)"; statusClass = "bgk"; }
+      else if (isDoubt && !isRight) { statusLabel = "⚠ Dudosa (fallada)"; statusClass = "bgw"; }
+      else if (!answered) { statusLabel = "— En blanco"; statusClass = "bgw"; }
+      else if (isRight) { statusLabel = "✓ Correcta"; statusClass = "bgk"; }
       return (
         <div className="fi">
           <button className="b bg" onClick={function() { setRi(null); }} style={{ marginBottom: 20 }}><IC.Lt /> Volver</button>
           <div className="qc">
             <div className="f jb2 ic mb12">
               <span className="qn">Pregunta {ri + 1}/{tqs.length}</span>
-              <div className="f ic g8"><span className={"bg2 " + (ok ? "bgk" : "bgd")}>{ok ? "✓ Correcta" : "✗ Incorrecta"}</span><button className="b bg bsm" onClick={function() { togB(rq.id); }}>{isB(rq.id) ? <IC.BmF /> : <IC.Bm />}</button></div>
+              <div className="f ic g8"><span className={"bg2 " + statusClass}>{statusLabel}</span><button className="b bg bsm" onClick={function() { togB(rq.id); }}>{isB(rq.id) ? <IC.BmF /> : <IC.Bm />}</button></div>
             </div>
             <div className="qt">{rq.text}</div>
             <div className="ol">
               {rq.options.map(function(o, oi) {
-                var cl = "ob"; if (oi === rq.correct) cl += " ok"; else if (oi === ua && !ok) cl += " no";
-                return <div key={oi} className={cl}><span className="olet">{String.fromCharCode(65 + oi)}</span><span>{o}</span>{oi === rq.correct && <span style={{ marginLeft: "auto" }}><IC.Chk /></span>}{oi === ua && !ok && <span style={{ marginLeft: "auto" }}><IC.X /></span>}</div>;
+                var cl = "ob";
+                if (oi === rq.correct) cl += " ok";
+                else if (answered && oi === ua && !isRight) cl += " no";
+                return <div key={oi} className={cl}><span className="olet">{String.fromCharCode(65 + oi)}</span><span>{o}</span>{oi === rq.correct ? <span style={{ marginLeft: "auto" }}><IC.Chk /></span> : null}{answered && oi === ua && !isRight ? <span style={{ marginLeft: "auto" }}><IC.X /></span> : null}</div>;
               })}
             </div>
-            {!ok && rq.justification && <div className="jb"><b>Justificación:</b> {rq.justification}</div>}
+            {(!isRight || (isDoubt && !answered)) && rq.justification ? <div className="jb"><b>Justificación:</b> {rq.justification}</div> : null}
           </div>
           <div className="f g8 jb2"><button className="b bs" disabled={ri === 0} onClick={function() { setRi(ri - 1); }}>Anterior</button><button className="b bs" disabled={ri === tqs.length - 1} onClick={function() { setRi(ri + 1); }}>Siguiente</button></div>
         </div>
@@ -714,21 +758,36 @@ function STest({ user, setView }) {
           <p style={{ fontSize: 14, color: "var(--tx3)", marginBottom: 8 }}>Tu resultado</p>
           <div className={"rs " + (sc2 >= 70 ? "g" : sc2 >= 50 ? "m" : "bad")}>{sc2}%</div>
           <p style={{ fontSize: 16, color: "var(--tx2)" }}>{sc2 >= 80 ? "¡Excelente!" : sc2 >= 60 ? "¡Bien, sigue así!" : "Necesitas repasar"}</p>
-          <div style={{ display: "flex", justifyContent: "center", gap: 32, marginTop: 16 }}>
-            <div style={{ textAlign: "center" }}><div style={{ fontSize: 22, fontWeight: 700, color: "var(--ok)" }}>{c2}</div><div style={{ fontSize: 13, color: "var(--tx3)" }}>Aciertos</div></div>
-            <div style={{ textAlign: "center" }}><div style={{ fontSize: 22, fontWeight: 700, color: "var(--err)" }}>{tqs.length - c2}</div><div style={{ fontSize: 13, color: "var(--tx3)" }}>Fallos</div></div>
-            <div style={{ textAlign: "center" }}><div style={{ fontSize: 22, fontWeight: 700 }}>{fmt(el)}</div><div style={{ fontSize: 13, color: "var(--tx3)" }}>Tiempo</div></div>
+          <div style={{ display: "flex", justifyContent: "center", gap: 20, marginTop: 16, flexWrap: "wrap" }}>
+            <div style={{ textAlign: "center" }}><div style={{ fontSize: 20, fontWeight: 700, color: "var(--ok)" }}>{nCorrect}</div><div style={{ fontSize: 12, color: "var(--tx3)" }}>Aciertos</div></div>
+            <div style={{ textAlign: "center" }}><div style={{ fontSize: 20, fontWeight: 700, color: "var(--err)" }}>{nIncorrect}</div><div style={{ fontSize: 12, color: "var(--tx3)" }}>Fallos</div></div>
+            <div style={{ textAlign: "center" }}><div style={{ fontSize: 20, fontWeight: 700, color: "var(--tx3)" }}>{nBlank}</div><div style={{ fontSize: 12, color: "var(--tx3)" }}>En blanco</div></div>
+            <div style={{ textAlign: "center" }}><div style={{ fontSize: 20, fontWeight: 700, color: "var(--ok)" }}>{nDoubtOk}</div><div style={{ fontSize: 12, color: "var(--tx3)" }}>Dudosa OK</div></div>
+            <div style={{ textAlign: "center" }}><div style={{ fontSize: 20, fontWeight: 700, color: "var(--warn)" }}>{nDoubtFail}</div><div style={{ fontSize: 12, color: "var(--tx3)" }}>Dudosa Mal</div></div>
+            <div style={{ textAlign: "center" }}><div style={{ fontSize: 20, fontWeight: 700, color: "var(--warn)" }}>{nDoubtBlank}</div><div style={{ fontSize: 12, color: "var(--tx3)" }}>Dudosa Blanco</div></div>
+            <div style={{ textAlign: "center" }}><div style={{ fontSize: 20, fontWeight: 700 }}>{fmt(el)}</div><div style={{ fontSize: 12, color: "var(--tx3)" }}>Tiempo</div></div>
           </div>
         </div>
         <div className="cd mb20">
           <div className="ct mb16">Revisa respuestas</div>
-          <div className="qmg">{tqs.map(function(qq, i) { var ok2 = ans[i] === qq.correct; return <button key={i} className="qm" style={{ background: ok2 ? "var(--ok-s)" : "var(--err-s)", borderColor: ok2 ? "var(--ok)" : "var(--err)", color: ok2 ? "var(--ok)" : "var(--err)" }} onClick={function() { setRi(i); }}>{i + 1}</button>; })}</div>
+          <div className="qmg">{tqs.map(function(qq, i) {
+            var answered2 = ans[i] !== undefined;
+            var isRight2 = ans[i] === qq.correct;
+            var isDoubt2 = !!doubts[i];
+            var bg = "var(--err-s)"; var bc = "var(--err)"; var co = "var(--err)";
+            if (isDoubt2 && !answered2) { bg = "var(--warn-s)"; bc = "var(--warn)"; co = "var(--warn)"; }
+            else if (isDoubt2 && isRight2) { bg = "var(--ok-s)"; bc = "var(--ok)"; co = "var(--ok)"; }
+            else if (isDoubt2) { bg = "var(--warn-s)"; bc = "var(--warn)"; co = "var(--warn)"; }
+            else if (!answered2) { bg = "var(--sf2)"; bc = "var(--bd2)"; co = "var(--tx3)"; }
+            else if (isRight2) { bg = "var(--ok-s)"; bc = "var(--ok)"; co = "var(--ok)"; }
+            return <button key={i} className="qm" style={{ background: bg, borderColor: bc, color: co }} onClick={function() { setRi(i); }}>{i + 1}</button>;
+          })}</div>
+          <p style={{ marginTop: 10, fontSize: 12, color: "var(--tx3)" }}>🟢 Acierto · 🔴 Fallo · ⚪ Blanco · 🟡 Dudosa — Clic para ver detalle</p>
         </div>
         <div className="f g12"><button className="b bp" onClick={function() { setStep("setup"); setDone(false); setTqs([]); }}>Nuevo test</button><button className="b bs" onClick={function() { setView("dashboard"); }}>Volver</button></div>
       </div>
     );
   }
-
   // ACTIVE TEST
   return (
     <div className="fi">
@@ -740,8 +799,7 @@ function STest({ user, setView }) {
       <div className="qc">
         <div className="f jb2 ic mb12">
           <span className="qn">Pregunta {ci + 1}/{tqs.length}</span>
-          <div className="f ic g8"><span className="bg2 bgi">{q.topic}</span><button className="b bg bsm" onClick={function() { togB(q.id); }}>{isB(q.id) ? <IC.BmF /> : <IC.Bm />}</button></div>
-        </div>
+<div className="f ic g8"><span className="bg2 bgi">{q.topic}</span><button type="button" style={{padding:"4px 10px",borderRadius:12,fontSize:11,fontWeight:600,cursor:"pointer",border:doubts[ci]?"1.5px solid var(--warn)":"1.5px solid var(--bd)",background:doubts[ci]?"var(--warn-s)":"var(--sf)",color:doubts[ci]?"var(--warn)":"var(--tx3)",fontFamily:"var(--f)"}} onClick={function(){var nd=Object.assign({},doubts);if(nd[ci])delete nd[ci];else nd[ci]=true;setDoubts(nd);}}>⚠ {doubts[ci]?"Dudosa":"Marcar dudosa"}</button><button className="b bg bsm" onClick={function() { togB(q.id); }}>{isB(q.id) ? <IC.BmF /> : <IC.Bm />}</button></div>        </div>
         <div className="qt">{q.text}</div>
         <div className="ol">
           {q.options.map(function(o, oi) {
