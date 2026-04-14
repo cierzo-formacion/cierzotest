@@ -1,83 +1,137 @@
 import { useState, useEffect, useRef, createContext, useContext } from "react";
-
-/* ====== DATA ====== */
-const INIT_OPOS = [
-  { id:"opo1", name:"Administrativo del Estado", commonTopics:["Constitución Española","Organización del Estado","Derecho Administrativo","Procedimiento Administrativo","Hacienda Pública"], specificTopics:["Gestión de Personal","Contratación Pública","Gestión Financiera","Ofimática","Atención al Ciudadano"] },
-  { id:"opo2", name:"Auxiliar Administrativo", commonTopics:["Constitución Española","Organización del Estado","Derecho Administrativo"], specificTopics:["Ofimática Básica","Atención al Público","Archivo y Documentación"] },
-];
-const INIT_USERS = [
-  { id:"admin1", username:"admin", password:"admin123", role:"admin", name:"Administrador", email:"admin@academiacierzo.es", createdAt:"2024-01-15" },
-  { id:"stu1", username:"alumno1", password:"1234", role:"student", name:"María García", email:"maria@email.com", createdAt:"2025-02-01", assignedOpos:["opo1"], streak:3, lastStudyDate:null },
-  { id:"stu2", username:"alumno2", password:"1234", role:"student", name:"Carlos López", email:"carlos@email.com", createdAt:"2025-03-10", assignedOpos:["opo1","opo2"], streak:7, lastStudyDate:null },
-];
-const INIT_QS = [
-  { id:"q1", opoId:"opo1", topic:"Constitución Española", type:"common", text:"¿En qué año se aprobó la Constitución Española vigente?", options:["1975","1978","1982","1986"], correct:1, justification:"Aprobada en referéndum el 6 de diciembre de 1978." },
-  { id:"q2", opoId:"opo1", topic:"Constitución Española", type:"common", text:"¿Cuántos títulos tiene la CE (incluyendo el Preliminar)?", options:["8","10","11"], correct:2, justification:"Título Preliminar + 10 Títulos = 11." },
-  { id:"q3", opoId:"opo1", topic:"Constitución Española", type:"common", text:"¿Cuál es la forma política del Estado español?", options:["República parlamentaria","Monarquía absoluta","Monarquía parlamentaria","Estado federal"], correct:2, justification:"Art. 1.3 CE: Monarquía parlamentaria." },
-  { id:"q4", opoId:"opo1", topic:"Constitución Española", type:"common", text:"¿Qué artículo recoge el derecho a la educación?", options:["Art. 14","Art. 27","Art. 35","Art. 43"], correct:1, justification:"Art. 27 CE." },
-  { id:"q5", opoId:"opo1", topic:"Constitución Española", type:"common", text:"¿Qué Título de la CE regula la Corona?", options:["Título I","Título II","Título III","Título IV"], correct:1, justification:"Título II (Arts. 56-65)." },
-  { id:"q6", opoId:"opo1", topic:"Constitución Española", type:"common", text:"¿Cuántos artículos tiene la CE?", options:["155","169","178","201"], correct:1, justification:"169 artículos." },
-  { id:"q7", opoId:"opo1", topic:"Organización del Estado", type:"common", text:"¿Quién ejerce la potestad legislativa?", options:["El Gobierno","Las Cortes Generales","El TC","El Rey"], correct:1, justification:"Art. 66.2 CE." },
-  { id:"q8", opoId:"opo1", topic:"Organización del Estado", type:"common", text:"¿Cuántos diputados tiene el Congreso?", options:["300","350","400","450"], correct:1, justification:"350 actualmente (Art. 68.1 CE)." },
-  { id:"q9", opoId:"opo1", topic:"Organización del Estado", type:"common", text:"¿Quién nombra al Presidente del Gobierno?", options:["Las Cortes","El Congreso","El Rey","El TC"], correct:2, justification:"Art. 62.d CE." },
-  { id:"q10", opoId:"opo1", topic:"Organización del Estado", type:"common", text:"¿Órgano de gobierno del Poder Judicial?", options:["Tribunal Supremo","CGPJ","Minist. Justicia","TC"], correct:1, justification:"Art. 122.2 CE." },
-  { id:"q11", opoId:"opo1", topic:"Derecho Administrativo", type:"common", text:"¿Ley del Procedimiento Administrativo Común?", options:["Ley 30/1992","Ley 39/2015","Ley 40/2015","Ley 29/1998"], correct:1, justification:"Ley 39/2015." },
-  { id:"q12", opoId:"opo1", topic:"Derecho Administrativo", type:"common", text:"¿Plazo máximo general para resolver un procedimiento?", options:["1 mes","3 meses","6 meses","1 año"], correct:1, justification:"Art. 21.3 Ley 39/2015." },
-  { id:"q13", opoId:"opo1", topic:"Derecho Administrativo", type:"common", text:"¿Recurso contra actos que agotan la vía administrativa?", options:["Alzada","Reposición","Revisión","Queja"], correct:1, justification:"Art. 123 Ley 39/2015." },
-  { id:"q14", opoId:"opo1", topic:"Procedimiento Administrativo", type:"common", text:"¿Plazo del recurso de alzada contra acto expreso?", options:["10 días","15 días","1 mes","3 meses"], correct:2, justification:"Art. 122 Ley 39/2015." },
-  { id:"q15", opoId:"opo1", topic:"Procedimiento Administrativo", type:"common", text:"¿Qué actos admiten revisión de oficio?", options:["Anulables","Nulos de pleno derecho","Cualquier acto","Solo firmes"], correct:1, justification:"Art. 106 Ley 39/2015." },
-  { id:"q16", opoId:"opo1", topic:"Hacienda Pública", type:"common", text:"¿Ley General Presupuestaria vigente?", options:["Ley 47/2003","Ley 58/2003","Ley 38/2003","Ley 11/2020"], correct:0, justification:"Ley 47/2003." },
-  { id:"q17", opoId:"opo1", topic:"Hacienda Pública", type:"common", text:"¿Quién elabora los PGE?", options:["Las Cortes","El Gobierno","Tribunal de Cuentas","Banco de España"], correct:1, justification:"Art. 134.1 CE." },
-  { id:"q18", opoId:"opo1", topic:"Gestión de Personal", type:"specific", text:"¿Norma que regula el TREBEP?", options:["Ley 7/2007","RDL 5/2015","Ley 30/1984","Ley 39/2015"], correct:1, justification:"RDL 5/2015." },
-  { id:"q19", opoId:"opo1", topic:"Gestión de Personal", type:"specific", text:"¿Grupos de clasificación del TREBEP?", options:["A1, A2, B, C1, C2","A, B, C, D, E","I a V","Superior/Medio/Aux"], correct:0, justification:"Art. 76 TREBEP." },
-  { id:"q20", opoId:"opo1", topic:"Gestión de Personal", type:"specific", text:"¿Días de vacaciones de un funcionario?", options:["20 hábiles","22 hábiles","30 naturales","25 hábiles"], correct:1, justification:"Art. 50 TREBEP." },
-  { id:"q21", opoId:"opo1", topic:"Contratación Pública", type:"specific", text:"¿Umbral contratos menores de servicios?", options:["15.000 eur","18.000 eur","40.000 eur","50.000 eur"], correct:0, justification:"Art. 118 Ley 9/2017." },
-  { id:"q22", opoId:"opo1", topic:"Contratación Pública", type:"specific", text:"¿Umbral contratos menores de obras?", options:["15.000 eur","40.000 eur","50.000 eur","80.000 eur"], correct:1, justification:"Art. 118 Ley 9/2017." },
-  { id:"q23", opoId:"opo1", topic:"Contratación Pública", type:"specific", text:"¿Ley de Contratos del Sector Público?", options:["Ley 30/2007","Ley 9/2017","Ley 3/2011","RDL 3/2020"], correct:1, justification:"Ley 9/2017." },
-  { id:"q24", opoId:"opo1", topic:"Gestión Financiera", type:"specific", text:"¿Principio de anualidad presupuestaria?", options:["Gastos en año natural","Presupuestos bienales","Créditos se trasladan","Ingresos mensuales"], correct:0, justification:"Art. 34 LGP." },
-  { id:"q25", opoId:"opo1", topic:"Ofimática", type:"specific", text:"¿Función Excel que busca en primera columna?", options:["BUSCARH","BUSCARV","INDICE","COINCIDIR"], correct:1, justification:"BUSCARV." },
-  { id:"q26", opoId:"opo1", topic:"Ofimática", type:"specific", text:"¿Extensión estándar de Word?", options:[".doc",".docx",".odt",".rtf"], correct:1, justification:".docx desde 2007." },
-  { id:"q27", opoId:"opo2", topic:"Constitución Española", type:"common", text:"¿Idioma oficial del Estado?", options:["Español y cooficiales","El castellano","El español","Todas las lenguas"], correct:1, justification:"Art. 3.1 CE." },
-  { id:"q28", opoId:"opo2", topic:"Constitución Española", type:"common", text:"¿Artículo de libertad de expresión?", options:["Art. 14","Art. 18","Art. 20","Art. 24"], correct:2, justification:"Art. 20 CE." },
-  { id:"q29", opoId:"opo2", topic:"Organización del Estado", type:"common", text:"¿Cámaras de las Cortes Generales?", options:["Una","Dos","Tres","Cuatro"], correct:1, justification:"Congreso y Senado (Art. 66.1 CE)." },
-  { id:"q30", opoId:"opo2", topic:"Derecho Administrativo", type:"common", text:"¿Qué es un acto administrativo?", options:["Ley parlamentaria","Declaración de voluntad de la Administración","Contrato privado","Sentencia judicial"], correct:1, justification:"Declaración de voluntad de la Administración." },
-  { id:"q31", opoId:"opo2", topic:"Ofimática Básica", type:"specific", text:"¿Atajo para copiar en Windows?", options:["Ctrl+V","Ctrl+C","Ctrl+X"], correct:1, justification:"Ctrl+C." },
-  { id:"q32", opoId:"opo2", topic:"Ofimática Básica", type:"specific", text:"¿Atajo para deshacer?", options:["Ctrl+Z","Ctrl+Y","Ctrl+D","Ctrl+R"], correct:0, justification:"Ctrl+Z." },
-  { id:"q33", opoId:"opo2", topic:"Ofimática Básica", type:"specific", text:"¿Programa de hojas de cálculo?", options:["Word","PowerPoint","Excel","Access"], correct:2, justification:"Excel." },
-  { id:"q34", opoId:"opo2", topic:"Atención al Público", type:"specific", text:"¿Ley de relación electrónica con la Administración?", options:["Ley 11/2007","Ley 39/2015","Ley 40/2015","Ley 59/2003"], correct:1, justification:"Art. 14 Ley 39/2015." },
-  { id:"q35", opoId:"opo2", topic:"Atención al Público", type:"specific", text:"¿Qué es el registro electrónico?", options:["Archivo físico","Plataforma documental ante la Adm.","BD de funcionarios","Libro contable"], correct:1, justification:"Art. 16 Ley 39/2015." },
-  { id:"q36", opoId:"opo2", topic:"Archivo y Documentación", type:"specific", text:"¿Qué es el ENI?", options:["Archivo físico","Marco interoperabilidad AAPP","Software","Protocolo seguridad"], correct:1, justification:"RD 4/2010." },
-  { id:"q37", opoId:"opo2", topic:"Archivo y Documentación", type:"specific", text:"¿Conservación de expedientes?", options:["1 año","5 años","Según normativa","Indefinidamente"], correct:2, justification:"Depende de tablas de valoración." },
-];
-const INIT_RES = [
-  { id:"r1", userId:"stu1", opoId:"opo1", date:new Date(Date.now()-172800000).toISOString(), score:72, correct:7, incorrect:3, totalQuestions:10, timeSeconds:420, topics:["Constitución Española","Organización del Estado"], details:[] },
-  { id:"r2", userId:"stu1", opoId:"opo1", date:new Date(Date.now()-86400000).toISOString(), score:80, correct:8, incorrect:2, totalQuestions:10, timeSeconds:380, topics:["Derecho Administrativo"], details:[] },
-  { id:"r3", userId:"stu2", opoId:"opo1", date:new Date(Date.now()-259200000).toISOString(), score:60, correct:6, incorrect:4, totalQuestions:10, timeSeconds:500, topics:["Constitución Española"], details:[] },
-  { id:"r4", userId:"stu2", opoId:"opo2", date:new Date(Date.now()-86400000).toISOString(), score:90, correct:9, incorrect:1, totalQuestions:10, timeSeconds:300, topics:["Ofimática Básica","Atención al Público"], details:[] },
-];
-
-/* ====== INIT SETTINGS ====== */
-const INIT_SETTINGS = {
-  penaltyEnabled: false,
-  penaltyValue: 0.33,
-  penaltyMode: "fraction", // "fraction" (1/3, 1/4...) or "fixed" (valor fijo)
-};
-
-function uid() { return Date.now().toString(36) + Math.random().toString(36).substr(2, 5); }
+import { supabase } from "./supabase";
 
 /* ====== CONTEXT ====== */
 const Ctx = createContext(null);
 
 function Store({ children }) {
-  const [users, setUsers] = useState(INIT_USERS);
-  const [questions, setQuestions] = useState(INIT_QS);
-  const [oposiciones, setOposiciones] = useState(INIT_OPOS);
-  const [results, setResults] = useState(INIT_RES);
+  const [users, setUsers] = useState([]);
+  const [questions, setQuestions] = useState([]);
+  const [oposiciones, setOposiciones] = useState([]);
+  const [results, setResults] = useState([]);
   const [bookmarks, setBookmarks] = useState([]);
   const [reports, setReports] = useState([]);
-  const [settings, setSettings] = useState(INIT_SETTINGS);
+  const [settings, setSettings] = useState({ penaltyEnabled: false, penaltyValue: 0.33, penaltyMode: "fraction", reportEmail: "" });
+  const [loading, setLoading] = useState(true);
 
-  const value = { users, setUsers, questions, setQuestions, oposiciones, setOposiciones, results, setResults, bookmarks, setBookmarks, reports, setReports, settings, setSettings };
+  useEffect(function() {
+    async function load() {
+      try {
+        // Load users with their assigned oposiciones
+        var { data: usersData } = await supabase.from("users").select("*");
+        var { data: userOpos } = await supabase.from("user_oposiciones").select("*");
+        var usersWithOpos = (usersData || []).map(function(u) {
+          var opoIds = (userOpos || []).filter(function(uo) { return uo.user_id === u.id; }).map(function(uo) { return uo.opo_id; });
+          return {
+            id: u.id, username: u.username, password: u.password, role: u.role,
+            name: u.name, email: u.email, createdAt: u.created_at,
+            streak: u.streak || 0, lastStudyDate: u.last_study_date,
+            assignedOpos: opoIds
+          };
+        });
+        setUsers(usersWithOpos);
+
+        // Load oposiciones
+        var { data: oposData } = await supabase.from("oposiciones").select("*");
+        var oposMapped = (oposData || []).map(function(o) {
+          return { id: o.id, name: o.name, commonTopics: o.common_topics || [], specificTopics: o.specific_topics || [] };
+        });
+        setOposiciones(oposMapped);
+
+        // Load questions
+        var { data: qData } = await supabase.from("questions").select("*");
+        var qMapped = (qData || []).map(function(q) {
+          return { id: q.id, opoId: q.opo_id, topic: q.topic, type: q.type, text: q.text, options: q.options, correct: q.correct, justification: q.justification };
+        });
+        setQuestions(qMapped);
+
+        // Load results
+        var { data: resData } = await supabase.from("results").select("*");
+        var resMapped = (resData || []).map(function(r) {
+          return {
+            id: r.id, userId: r.user_id, opoId: r.opo_id, date: r.date, score: r.score,
+            correct: r.correct, incorrect: r.incorrect, blank: r.blank,
+            doubtOk: r.doubt_ok, doubtFail: r.doubt_fail, doubtBlank: r.doubt_blank,
+            totalQuestions: r.total_questions, timeSeconds: r.time_seconds,
+            topics: r.topics || [], details: r.details || [],
+            penaltyApplied: r.penalty_applied, penaltyValue: r.penalty_value
+          };
+        });
+        setResults(resMapped);
+
+        // Load bookmarks
+        var { data: bmData } = await supabase.from("bookmarks").select("*");
+        var bmMapped = (bmData || []).map(function(b) { return b.user_id + "_" + b.question_id; });
+        setBookmarks(bmMapped);
+
+        // Load reports
+        var { data: repData } = await supabase.from("reports").select("*");
+        var repMapped = (repData || []).map(function(r) {
+          return { id: r.id, userId: r.user_id, questionId: r.question_id, reason: r.reason, date: r.date, resolved: r.resolved, resolvedAt: r.resolved_at };
+        });
+        setReports(repMapped);
+
+        // Load settings
+        var { data: setData } = await supabase.from("settings").select("*").eq("id", 1).single();
+        if (setData) {
+          setSettings({ penaltyEnabled: setData.penalty_enabled, penaltyValue: Number(setData.penalty_value), penaltyMode: setData.penalty_mode, reportEmail: setData.report_email || "" });
+        }
+      } catch(e) {
+        console.error("Error loading data:", e);
+      }
+      setLoading(false);
+    }
+    load();
+  }, []);
+
+  // Wrapper functions that persist to Supabase
+  async function updateUsers(newUsers) {
+    setUsers(newUsers);
+  }
+  async function updateQuestions(newQuestions) {
+    setQuestions(newQuestions);
+  }
+  async function updateOposiciones(newOpos) {
+    setOposiciones(newOpos);
+  }
+  async function updateResults(newResults) {
+    setResults(newResults);
+  }
+  async function updateBookmarks(newBm) {
+    setBookmarks(newBm);
+  }
+  async function updateReports(newRep) {
+    setReports(newRep);
+  }
+  async function updateSettings(newSet) {
+    setSettings(newSet);
+    await supabase.from("settings").update({
+      penalty_enabled: newSet.penaltyEnabled,
+      penalty_value: newSet.penaltyValue,
+      penalty_mode: newSet.penaltyMode,
+      report_email: newSet.reportEmail || ""
+    }).eq("id", 1);
+  }
+
+  if (loading) {
+    return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg)" }}>
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontSize: 24, fontWeight: 700, color: "var(--accent)", marginBottom: 8 }}>CierzoTest</div>
+        <div style={{ fontSize: 14, color: "var(--tx3)" }}>Cargando datos...</div>
+      </div>
+    </div>;
+  }
+
+  var value = {
+    users: users, setUsers: updateUsers,
+    questions: questions, setQuestions: updateQuestions,
+    oposiciones: oposiciones, setOposiciones: updateOposiciones,
+    results: results, setResults: updateResults,
+    bookmarks: bookmarks, setBookmarks: updateBookmarks,
+    reports: reports, setReports: updateReports,
+    settings: settings, setSettings: updateSettings,
+    supabase: supabase
+  };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
@@ -235,7 +289,7 @@ function Login({ onLogin }) {
         <h1>Bienvenido</h1>
         <p>Accede a tu plataforma de oposiciones</p>
         {error && <div className="le"><IC.Warn />{error}</div>}
-        <div>
+        <div onKeyDown={function(e) { if (e.key === "Enter") handleClick(); }}>
           <div className="fd">
             <label>Usuario</label>
             <input value={username} onChange={function(e) { setUsername(e.target.value); setError(""); }} placeholder="Tu usuario" />
@@ -360,14 +414,33 @@ function ADash() {
 
 /* ====== ADMIN STUDENTS ====== */
 function AStudents() {
-  const { users, setUsers, oposiciones, results } = useStore();
+  const { users, setUsers, oposiciones, results, supabase } = useStore();
   const [show, setShow] = useState(false);
   const [ed, setEd] = useState(null);
   const [fm, setFm] = useState({ name: "", username: "", password: "", email: "", assignedOpos: [] });
   const stu = users.filter(function(u) { return u.role === "student"; });
 
   function open(s) { setEd(s || null); setFm(s ? { name: s.name, username: s.username, password: s.password, email: s.email || "", assignedOpos: s.assignedOpos || [] } : { name: "", username: "", password: "", email: "", assignedOpos: [] }); setShow(true); }
-  function save() { if (!fm.name || !fm.username || !fm.password) return; if (ed) { setUsers(users.map(function(u) { return u.id === ed.id ? Object.assign({}, u, fm) : u; })); } else { setUsers(users.concat([Object.assign({ id: uid(), role: "student", streak: 0, lastStudyDate: null, createdAt: new Date().toISOString().split("T")[0] }, fm)])); } setShow(false); }
+  async function save() {
+    if (!fm.name || !fm.username || !fm.password) return;
+    if (ed) {
+      await supabase.from("users").update({ name: fm.name, username: fm.username, password: fm.password, email: fm.email }).eq("id", ed.id);
+      await supabase.from("user_oposiciones").delete().eq("user_id", ed.id);
+      if (fm.assignedOpos.length) { await supabase.from("user_oposiciones").insert(fm.assignedOpos.map(function(oid) { return { user_id: ed.id, opo_id: oid }; })); }
+      setUsers(users.map(function(u) { return u.id === ed.id ? Object.assign({}, u, fm) : u; }));
+    } else {
+      var { data } = await supabase.from("users").insert({ username: fm.username, password: fm.password, role: "student", name: fm.name, email: fm.email }).select().single();
+      if (data) {
+        if (fm.assignedOpos.length) { await supabase.from("user_oposiciones").insert(fm.assignedOpos.map(function(oid) { return { user_id: data.id, opo_id: oid }; })); }
+        setUsers(users.concat([{ id: data.id, role: "student", streak: 0, lastStudyDate: null, createdAt: data.created_at, name: fm.name, username: fm.username, password: fm.password, email: fm.email, assignedOpos: fm.assignedOpos }]));
+      }
+    }
+    setShow(false);
+  }
+  async function delUser(id) {
+    await supabase.from("users").delete().eq("id", id);
+    setUsers(users.filter(function(u) { return u.id !== id; }));
+  }
 
   return (
     <div className="fi">
@@ -384,7 +457,7 @@ function AStudents() {
               <td><div className="f fw g8">{(s.assignedOpos || []).map(function(id) { var o = oposiciones.find(function(x) { return x.id === id; }); return o ? <span key={id} className="bg2 bgi">{o.name}</span> : null; })}</div></td>
               <td>{sr.length}</td>
               <td><span className={"bg2 " + (a >= 70 ? "bgk" : a >= 50 ? "bgw" : "bgd")}>{a}%</span></td>
-              <td><div className="f g8"><button className="b bg bsm" onClick={function() { open(s); }}><IC.Pen /></button><button className="b bg bsm" style={{ color: "var(--err)" }} onClick={function() { setUsers(users.filter(function(u) { return u.id !== s.id; })); }}><IC.Del /></button></div></td>
+              <td><div className="f g8"><button className="b bg bsm" onClick={function() { open(s); }}><IC.Pen /></button><button className="b bg bsm" style={{ color: "var(--err)" }} onClick={function() { delUser(s.id); }}><IC.Del /></button></div></td>
             </tr>
           );
         })}
@@ -417,19 +490,28 @@ function AStudents() {
 
 /* ====== ADMIN OPOSICIONES ====== */
 function AOpos() {
-  const { oposiciones, setOposiciones, questions } = useStore();
+  const { oposiciones, setOposiciones, questions, supabase } = useStore();
   const [show, setShow] = useState(false);
   const [ed, setEd] = useState(null);
   const [fm, setFm] = useState({ name: "", ct: "", st: "" });
 
   function open(o) { setEd(o || null); setFm(o ? { name: o.name, ct: o.commonTopics.join("\n"), st: o.specificTopics.join("\n") } : { name: "", ct: "", st: "" }); setShow(true); }
-  function save() {
+  async function save() {
     if (!fm.name) return;
     var c = fm.ct.split("\n").map(function(t) { return t.trim(); }).filter(Boolean);
     var s = fm.st.split("\n").map(function(t) { return t.trim(); }).filter(Boolean);
-    if (ed) { setOposiciones(oposiciones.map(function(o) { return o.id === ed.id ? Object.assign({}, o, { name: fm.name, commonTopics: c, specificTopics: s }) : o; })); }
-    else { setOposiciones(oposiciones.concat([{ id: uid(), name: fm.name, commonTopics: c, specificTopics: s }])); }
+    if (ed) {
+      await supabase.from("oposiciones").update({ name: fm.name, common_topics: c, specific_topics: s }).eq("id", ed.id);
+      setOposiciones(oposiciones.map(function(o) { return o.id === ed.id ? Object.assign({}, o, { name: fm.name, commonTopics: c, specificTopics: s }) : o; }));
+    } else {
+      var { data } = await supabase.from("oposiciones").insert({ name: fm.name, common_topics: c, specific_topics: s }).select().single();
+      if (data) { setOposiciones(oposiciones.concat([{ id: data.id, name: fm.name, commonTopics: c, specificTopics: s }])); }
+    }
     setShow(false);
+  }
+  async function delOpo(id) {
+    await supabase.from("oposiciones").delete().eq("id", id);
+    setOposiciones(oposiciones.filter(function(x) { return x.id !== id; }));
   }
 
   return (
@@ -442,7 +524,7 @@ function AOpos() {
             <div key={o.id} className="cd">
               <div className="ch">
                 <div><span className="ct">{o.name}</span><div style={{ marginTop: 4 }}><span className="bg2 bgi">{qc} preguntas</span></div></div>
-                <div className="f g8"><button className="b bg bsm" onClick={function() { open(o); }}><IC.Pen /> Editar</button><button className="b bg bsm" style={{ color: "var(--err)" }} onClick={function() { setOposiciones(oposiciones.filter(function(x) { return x.id !== o.id; })); }}><IC.Del /></button></div>
+                <div className="f g8"><button className="b bg bsm" onClick={function() { open(o); }}><IC.Pen /> Editar</button><button className="b bg bsm" style={{ color: "var(--err)" }} onClick={function() { delOpo(o.id); }}><IC.Del /></button></div>
               </div>
               <div className="g2">
                 <div><p style={{ fontSize: 13, fontWeight: 600, color: "var(--tx3)", marginBottom: 8 }}>COMÚN</p>{o.commonTopics.map(function(t, i) { return <div key={i} style={{ fontSize: 14, padding: "4px 0", color: "var(--tx2)" }}>• {t}</div>; })}</div>
@@ -469,7 +551,7 @@ function AOpos() {
 
 /* ====== ADMIN QUESTIONS ====== */
 function AQuestions() {
-  const { questions, setQuestions, oposiciones } = useStore();
+  const { questions, setQuestions, oposiciones, supabase } = useStore();
   const [fo, setFo] = useState("all");
   const [sr, setSr] = useState("");
   const [imp, setImp] = useState(false);
@@ -478,7 +560,7 @@ function AQuestions() {
 
   var fq = questions.filter(function(q) { if (fo !== "all" && q.opoId !== fo) return false; if (sr && q.text.toLowerCase().indexOf(sr.toLowerCase()) < 0) return false; return true; });
 
-  function doCSV(text) {
+  async function doCSV(text) {
     try {
       var ls = text.split("\n").filter(function(l) { return l.trim(); });
       if (ls.length < 2) { setIr({ e: "Archivo vacío" }); return; }
@@ -497,12 +579,22 @@ function AQuestions() {
         var cm = { a: 0, b: 1, c: 2, d: 3 };
         var ci = cm[row.respuesta_correcta ? row.respuesta_correcta.toLowerCase() : ""];
         if (ci === undefined || ci >= opts.length) continue;
-        nq.push({ id: uid(), opoId: row.oposicion_id, topic: row.tema, type: row.tipo || "common", text: row.pregunta, options: opts, correct: ci, justification: row.justificacion || "" });
+        nq.push({ opo_id: row.oposicion_id, topic: row.tema, type: row.tipo || "common", text: row.pregunta, options: opts, correct: ci, justification: row.justificacion || "" });
         n++;
       }
-      setQuestions(questions.concat(nq));
+      if (nq.length) {
+        var { data } = await supabase.from("questions").insert(nq).select();
+        if (data) {
+          var mapped = data.map(function(q) { return { id: q.id, opoId: q.opo_id, topic: q.topic, type: q.type, text: q.text, options: q.options, correct: q.correct, justification: q.justification }; });
+          setQuestions(questions.concat(mapped));
+        }
+      }
       setIr({ n: n });
     } catch (e) { setIr({ e: e.message }); }
+  }
+  async function delQuestion(id) {
+    await supabase.from("questions").delete().eq("id", id);
+    setQuestions(questions.filter(function(x) { return x.id !== id; }));
   }
 
   return (
@@ -529,7 +621,7 @@ function AQuestions() {
                 <td style={{ maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{q.text}</td>
                 <td><span className="bg2 bgi">{q.topic}</span></td>
                 <td><span className={"bg2 " + (q.type === "common" ? "bgk" : "bgw")}>{q.type === "common" ? "Común" : "Espec."}</span></td>
-                <td><button className="b bg bsm" style={{ color: "var(--err)" }} onClick={function() { setQuestions(questions.filter(function(x) { return x.id !== q.id; })); }}><IC.Del /></button></td>
+                <td><button className="b bg bsm" style={{ color: "var(--err)" }} onClick={function() { delQuestion(q.id); }}><IC.Del /></button></td>
               </tr>
             );
           })}
@@ -558,8 +650,15 @@ function AQuestions() {
 
 /* ====== ADMIN REPORTS ====== */
 function AReports() {
-  const { reports, setReports, questions, users } = useStore();
+  const { reports, setReports, questions, users, supabase } = useStore();
   const [filter, setFilter] = useState("pending");
+  var fr = filter === "pending" ? reports.filter(function(r) { return !r.resolved; }) : filter === "resolved" ? reports.filter(function(r) { return r.resolved; }) : reports;
+
+  async function resolveReport(id) {
+    var now = new Date().toISOString();
+    await supabase.from("reports").update({ resolved: true, resolved_at: now }).eq("id", id);
+    setReports(reports.map(function(x) { return x.id === id ? Object.assign({}, x, { resolved: true, resolvedAt: now }) : x; }));
+  }
   var fr = filter === "pending" ? reports.filter(function(r) { return !r.resolved; }) : filter === "resolved" ? reports.filter(function(r) { return r.resolved; }) : reports;
 
   return (
@@ -585,7 +684,7 @@ function AReports() {
                     <span style={{ fontSize: 13, color: "var(--tx3)" }}>{new Date(r.date).toLocaleDateString("es-ES", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
                   </div>
                   {!r.resolved && (
-                    <button className="b bk bsm" onClick={function() { setReports(reports.map(function(x) { return x.id === r.id ? Object.assign({}, x, { resolved: true, resolvedAt: new Date().toISOString() }) : x; })); }}><IC.Chk /> Marcar resuelto</button>
+                    <button className="b bk bsm" onClick={function() { resolveReport(r.id); }}><IC.Chk /> Marcar resuelto</button>
                   )}
                 </div>
                 <div style={{ fontSize: 13, color: "var(--tx2)", marginBottom: 8 }}>Reportado por: <b>{u ? u.name : "—"}</b></div>
@@ -684,13 +783,24 @@ function ASettings() {
           <button className="b bp" onClick={showSaved}>Guardar ajustes</button>
         </div>
       </div>
+
+      <div className="cd mb20">
+        <div className="ct mb16">Email de reportes</div>
+        <p style={{ fontSize: 14, color: "var(--tx2)", marginBottom: 16, lineHeight: 1.6 }}>
+          Dirección de email donde se notificarán los reportes de preguntas erróneas enviados por los alumnos.
+        </p>
+        <div className="fd">
+          <label>Email de notificaciones</label>
+          <input value={settings.reportEmail || ""} onChange={function(e) { setSettings(Object.assign({}, settings, { reportEmail: e.target.value })); }} placeholder="test@cierzoformacion.com" style={{ maxWidth: 360 }} />
+        </div>
+      </div>
     </div>
   );
 }
 
 /* ====== STUDENT PROFILE ====== */
 function SProfile({ user }) {
-  const { users, setUsers, oposiciones, results } = useStore();
+  const { users, setUsers, oposiciones, results, supabase } = useStore();
   var cu = users.find(function(u) { return u.id === user.id; }) || user;
   var mr = results.filter(function(r) { return r.userId === user.id; });
   var my = oposiciones.filter(function(o) { return (cu.assignedOpos || []).indexOf(o.id) >= 0; });
@@ -699,6 +809,18 @@ function SProfile({ user }) {
   const [pwdForm, setPwdForm] = useState({ current: "", newPwd: "", confirm: "" });
   const [pwdError, setPwdError] = useState("");
   const [pwdOk, setPwdOk] = useState(false);
+  const [editEmail, setEditEmail] = useState(false);
+  const [newEmail, setNewEmail] = useState(cu.email || "");
+  const [emailOk, setEmailOk] = useState(false);
+
+  async function saveEmail() {
+    if (!newEmail.trim()) return;
+    await supabase.from("users").update({ email: newEmail.trim() }).eq("id", user.id);
+    setUsers(users.map(function(u) { return u.id === user.id ? Object.assign({}, u, { email: newEmail.trim() }) : u; }));
+    setEditEmail(false);
+    setEmailOk(true);
+    setTimeout(function() { setEmailOk(false); }, 2000);
+  }
 
   function changePwd() {
     setPwdError("");
@@ -718,6 +840,7 @@ function SProfile({ user }) {
       setPwdError("Las contraseñas no coinciden");
       return;
     }
+    supabase.from("users").update({ password: pwdForm.newPwd }).eq("id", user.id);
     setUsers(users.map(function(u) { return u.id === user.id ? Object.assign({}, u, { password: pwdForm.newPwd }) : u; }));
     setPwdOk(true);
     setPwdForm({ current: "", newPwd: "", confirm: "" });
@@ -729,6 +852,7 @@ function SProfile({ user }) {
       <div className="ph"><h2>Mi Perfil</h2><p>Tus datos y configuración</p></div>
 
       {pwdOk && <div className="success-msg"><IC.Chk /> Contraseña actualizada correctamente</div>}
+      {emailOk && <div className="success-msg"><IC.Chk /> Email actualizado correctamente</div>}
 
       <div className="g2">
         <div className="cd">
@@ -741,7 +865,18 @@ function SProfile({ user }) {
           </div>
           <div className="profile-field">
             <span className="profile-label">Email</span>
-            <span className="profile-value">{cu.email || "No configurado"}</span>
+            {editEmail ? (
+              <div className="f ic g8">
+                <input value={newEmail} onChange={function(e) { setNewEmail(e.target.value); }} onKeyDown={function(e) { if (e.key === "Enter") saveEmail(); }} style={{ padding: "6px 10px", border: "1.5px solid var(--bd)", borderRadius: "var(--rs)", fontSize: 14, fontFamily: "var(--f)", width: 200 }} />
+                <button className="b bp bsm" onClick={saveEmail}>Guardar</button>
+                <button className="b bg bsm" onClick={function() { setEditEmail(false); setNewEmail(cu.email || ""); }}>Cancelar</button>
+              </div>
+            ) : (
+              <div className="f ic g8">
+                <span className="profile-value">{cu.email || "No configurado"}</span>
+                <button className="b bg bsm" onClick={function() { setEditEmail(true); }}><IC.Pen /></button>
+              </div>
+            )}
           </div>
           <div className="profile-field">
             <span className="profile-label">Usuario</span>
@@ -848,7 +983,7 @@ function SDash({ user }) {
 
 /* ====== STUDENT TEST ====== */
 function STest({ user, setView }) {
-  const { oposiciones, questions: allQ, results, setResults, users, setUsers, bookmarks, setBookmarks, reports, setReports, settings } = useStore();
+  const { oposiciones, questions: allQ, results, setResults, users, setUsers, bookmarks, setBookmarks, reports, setReports, settings, supabase } = useStore();
   var my = oposiciones.filter(function(o) { return (user.assignedOpos || []).indexOf(o.id) >= 0; });
 
   const [step, setStep] = useState("setup");
@@ -880,7 +1015,7 @@ function STest({ user, setView }) {
       "RESPUESTA CORRECTA: " + String.fromCharCode(65 + question.correct) + ") " + question.options[question.correct] + "\n" +
       "JUSTIFICACIÓN OFICIAL: " + (justification || "No disponible");
 
-    fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + process.env.REACT_APP_GEMINI_KEY, {
+    fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + process.env.REACT_APP_GEMINI_KEY, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
@@ -929,22 +1064,20 @@ function STest({ user, setView }) {
     setTqs(sh); setAns({}); setDoubts({}); setCi(0); setT0(Date.now()); setEl(0); setStep("test");
   }
 
-  function sendReport(questionId) {
+  async function sendReport(questionId) {
     if (!reportText.trim()) return;
-    setReports(reports.concat([{
-      id: uid(),
-      userId: user.id,
-      questionId: questionId,
-      reason: reportText.trim(),
-      date: new Date().toISOString(),
-      resolved: false
-    }]));
+    var { data } = await supabase.from("reports").insert({
+      user_id: user.id, question_id: questionId, reason: reportText.trim()
+    }).select().single();
+    if (data) {
+      setReports(reports.concat([{ id: data.id, userId: user.id, questionId: questionId, reason: reportText.trim(), date: data.date, resolved: false }]));
+    }
     setReportSent(true);
     setReportText("");
     setTimeout(function() { setReportSent(false); setShowReport(null); }, 2000);
   }
 
-  function finish() {
+  async function finish() {
     var tt2 = Math.floor((Date.now() - t0) / 1000);
     var correct = 0;
     var incorrect = 0;
@@ -991,22 +1124,45 @@ function STest({ user, setView }) {
       else if (isRight) status = "correct";
       return { questionId: q.id, topic: q.topic, selected: ans[i], correct: q.correct, isCorrect: isRight, doubt: isDoubt, status: status };
     });
-    setResults(results.concat([{
-      id: uid(), userId: user.id, opoId: so, date: new Date().toISOString(), score: sc, correct: correct, incorrect: incorrect, blank: blank, doubtOk: doubtOk, doubtFail: doubtFail, doubtBlank: doubtBlank, totalQuestions: tqs.length, timeSeconds: tt2, topics: tops, details: details,
+
+    // Save result to Supabase
+    var { data: resData } = await supabase.from("results").insert({
+      user_id: user.id, opo_id: so, score: sc, correct: correct, incorrect: incorrect,
+      blank: blank, doubt_ok: doubtOk, doubt_fail: doubtFail, doubt_blank: doubtBlank,
+      total_questions: tqs.length, time_seconds: tt2, topics: tops, details: details,
+      penalty_applied: settings.penaltyEnabled, penalty_value: settings.penaltyValue
+    }).select().single();
+
+    var newResult = {
+      id: resData ? resData.id : Date.now().toString(), userId: user.id, opoId: so, date: resData ? resData.date : new Date().toISOString(), score: sc, correct: correct, incorrect: incorrect, blank: blank, doubtOk: doubtOk, doubtFail: doubtFail, doubtBlank: doubtBlank, totalQuestions: tqs.length, timeSeconds: tt2, topics: tops, details: details,
       penaltyApplied: settings.penaltyEnabled, penaltyValue: settings.penaltyValue
-    }]));
+    };
+    setResults(results.concat([newResult]));
+
+    // Update streak
     var today = new Date().toDateString();
+    var cu = users.find(function(u) { return u.id === user.id; });
+    var y = new Date(Date.now() - 86400000).toDateString();
+    var ns = cu ? (cu.streak || 0) : 0;
+    if (!cu || cu.lastStudyDate !== today) ns = (cu && cu.lastStudyDate === y) ? ns + 1 : 1;
+    await supabase.from("users").update({ streak: ns, last_study_date: new Date().toISOString().split("T")[0] }).eq("id", user.id);
     setUsers(users.map(function(u) {
       if (u.id !== user.id) return u;
-      var y = new Date(Date.now() - 86400000).toDateString();
-      var ns = u.streak || 0;
-      if (u.lastStudyDate !== today) ns = u.lastStudyDate === y ? ns + 1 : 1;
       return Object.assign({}, u, { streak: ns, lastStudyDate: today });
     }));
     setDone(true);
   }
 
-  function togB(id) { var k = user.id + "_" + id; setBookmarks(bookmarks.indexOf(k) >= 0 ? bookmarks.filter(function(b) { return b !== k; }) : bookmarks.concat([k])); }
+  async function togB(id) {
+    var k = user.id + "_" + id;
+    if (bookmarks.indexOf(k) >= 0) {
+      await supabase.from("bookmarks").delete().eq("user_id", user.id).eq("question_id", id);
+      setBookmarks(bookmarks.filter(function(b) { return b !== k; }));
+    } else {
+      await supabase.from("bookmarks").insert({ user_id: user.id, question_id: id });
+      setBookmarks(bookmarks.concat([k]));
+    }
+  }
   function isB(id) { return bookmarks.indexOf(user.id + "_" + id) >= 0; }
 
   // SETUP
@@ -1101,9 +1257,9 @@ function STest({ user, setView }) {
               })}
             </div>
             {(!isRight || (isDoubt && !answered)) && rq.justification ? <div className="jb"><b>Justificación:</b> {rq.justification}</div> : null}
-{(!isRight || (isDoubt && !answered)) && (
+            {(!isRight || (isDoubt && !answered)) && (
               <div style={{ marginTop: 14 }}>
-                                {!aiResponses[ri] ? (
+                {!aiResponses[ri] ? (
                   <button className="b bp bsm" onClick={function() { askGemini(rq, ua, rq.correct, rq.justification, ri); }} disabled={aiLoading} style={{ background: "linear-gradient(135deg, #4285F4, #34A853)", border: "none" }}>
                     <IC.Bot /> {aiLoading ? "Pensando..." : "Explicar con IA"}
                   </button>
@@ -1308,9 +1464,14 @@ function SHist({ user }) {
 
 /* ====== STUDENT BOOKMARKS ====== */
 function SBookmarks({ user }) {
-  const { bookmarks, setBookmarks, questions } = useStore();
+  const { bookmarks, setBookmarks, questions, supabase } = useStore();
   var ids = bookmarks.filter(function(b) { return b.indexOf(user.id + "_") === 0; }).map(function(b) { return b.split("_")[1]; });
   var bqs = questions.filter(function(q) { return ids.indexOf(q.id) >= 0; });
+
+  async function removeBm(qid) {
+    await supabase.from("bookmarks").delete().eq("user_id", user.id).eq("question_id", qid);
+    setBookmarks(bookmarks.filter(function(b) { return b !== user.id + "_" + qid; }));
+  }
 
   return (
     <div className="fi">
@@ -1320,7 +1481,7 @@ function SBookmarks({ user }) {
           {bqs.map(function(q) {
             return (
               <div key={q.id} className="cd" style={{ padding: 20 }}>
-                <div className="f jb2 ic mb12"><span className="bg2 bgi">{q.topic}</span><button className="b bg bsm" style={{ color: "var(--err)" }} onClick={function() { setBookmarks(bookmarks.filter(function(b) { return b !== user.id + "_" + q.id; })); }}><IC.Del /></button></div>
+                <div className="f jb2 ic mb12"><span className="bg2 bgi">{q.topic}</span><button className="b bg bsm" style={{ color: "var(--err)" }} onClick={function() { removeBm(q.id); }}><IC.Del /></button></div>
                 <p style={{ fontSize: 15, fontWeight: 500, marginBottom: 12 }}>{q.text}</p>
                 <div style={{ display: "grid", gap: 6 }}>
                   {q.options.map(function(o, i) {
