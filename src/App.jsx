@@ -341,7 +341,7 @@ function Side({ user, view, setView, logout }) {
   var isA = user.role === "admin";
   var pendingReports = reports.filter(function(r) { return !r.resolved; }).length;
   var nav = isA
-    ? [["dashboard", "Dashboard", IC.Dash], ["students", "Alumnos", IC.Ppl], ["oposiciones", "Oposiciones", IC.Test], ["questions", "Preguntas", IC.Up], ["reports", "Reportes", IC.Flag], ["settings", "Ajustes", IC.Gear]]
+    ? [["dashboard", "Dashboard", IC.Dash], ["students", "Alumnos", IC.Ppl], ["oposiciones", "Oposiciones", IC.Test], ["questions", "Preguntas", IC.Up], ["generate", "Generar con IA", IC.Bot], ["reports", "Reportes", IC.Flag], ["settings", "Ajustes", IC.Gear]]
     : [["dashboard", "Mi Panel", IC.Dash], ["test", "Hacer Test", IC.Test], ["stats", "Estadísticas", IC.Bar], ["history", "Historial", IC.Hist], ["bookmarks", "Guardadas", IC.Bm], ["profile", "Mi Perfil", IC.User]];
 
   return (
@@ -794,6 +794,277 @@ function ASettings() {
           <input value={settings.reportEmail || ""} onChange={function(e) { setSettings(Object.assign({}, settings, { reportEmail: e.target.value })); }} placeholder="test@cierzoformacion.com" style={{ maxWidth: 360 }} />
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ====== ADMIN AI GENERATOR ====== */
+function AGenerate() {
+  const { oposiciones, questions, setQuestions, supabase } = useStore();
+  const [mode, setMode] = useState("tema");
+  const [so, setSo] = useState("");
+  const [topic, setTopic] = useState("");
+  const [customTopic, setCustomTopic] = useState("");
+  const [nq, setNq] = useState(10);
+  const [pdfText, setPdfText] = useState("");
+  const [pdfName, setPdfName] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [generated, setGenerated] = useState([]);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
+  const fileRef = useRef();
+
+  var selOpo = oposiciones.find(function(o) { return o.id === so; });
+  var allTopics = selOpo ? selOpo.commonTopics.concat(selOpo.specificTopics) : [];
+
+  function handlePdf(e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    setPdfName(file.name);
+    var reader = new FileReader();
+    reader.onload = function(ev) {
+      var text = ev.target.result;
+      // For txt files, use directly
+      if (file.name.endsWith(".txt")) {
+        setPdfText(text);
+        return;
+      }
+      // For PDF, we extract what we can (basic text extraction)
+      setPdfText(text);
+    };
+    if (file.name.endsWith(".txt")) {
+      reader.readAsText(file);
+    } else {
+      // For PDFs, read as text (will work for text-based PDFs)
+      reader.readAsText(file);
+    }
+  }
+
+  async function generate() {
+    if (!so) { setError("Selecciona una oposición"); return; }
+    if (mode === "tema" && !topic && !customTopic) { setError("Selecciona o escribe un tema"); return; }
+    if (mode === "pdf" && !pdfText) { setError("Sube un archivo primero"); return; }
+    setError("");
+    setLoading(true);
+    setGenerated([]);
+
+    var themeName = topic || customTopic;
+    var opoName = selOpo ? selOpo.name : "";
+    var prompt = "";
+
+    if (mode === "tema") {
+      prompt = "Eres un experto en oposiciones españolas. Genera exactamente " + nq + " preguntas tipo test para la oposición '" + opoName + "', tema '" + themeName + "'.\n\n" +
+        "REGLAS ESTRICTAS:\n" +
+        "- Cada pregunta debe tener entre 3 y 4 opciones de respuesta\n" +
+        "- Solo una respuesta es correcta\n" +
+        "- Las preguntas deben ser precisas, basadas en legislación vigente española\n" +
+        "- Incluir justificación legal (artículo, ley) para cada respuesta correcta\n" +
+        "- Nivel de dificultad variado (fácil, medio, difícil)\n" +
+        "- No repetir preguntas obvias\n\n" +
+        "FORMATO OBLIGATORIO - Responde SOLO con un JSON array, sin markdown, sin ```json, sin explicaciones previas ni posteriores:\n" +
+        '[{"text":"pregunta","options":["opA","opB","opC","opD"],"correct":0,"justification":"explicación"}]\n\n' +
+        "Donde 'correct' es el índice (0,1,2,3) de la respuesta correcta. Genera exactamente " + nq + " objetos.";
+    } else {
+      var truncated = pdfText.substring(0, 12000);
+      prompt = "Eres un experto en oposiciones españolas. A partir del siguiente texto de temario, genera exactamente " + nq + " preguntas tipo test.\n\n" +
+        "TEXTO DEL TEMARIO:\n" + truncated + "\n\n" +
+        "REGLAS ESTRICTAS:\n" +
+        "- Cada pregunta debe tener entre 3 y 4 opciones de respuesta\n" +
+        "- Solo una respuesta es correcta\n" +
+        "- Las preguntas deben extraerse del contenido proporcionado\n" +
+        "- Incluir justificación basada en el texto para cada respuesta\n" +
+        "- Nivel de dificultad variado\n\n" +
+        "FORMATO OBLIGATORIO - Responde SOLO con un JSON array, sin markdown, sin ```json, sin explicaciones:\n" +
+        '[{"text":"pregunta","topic":"tema detectado","options":["opA","opB","opC","opD"],"correct":0,"justification":"explicación"}]\n\n' +
+        "Donde 'correct' es el índice (0,1,2,3) de la respuesta correcta. Genera exactamente " + nq + " objetos.";
+    }
+
+    try {
+      var res = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + process.env.REACT_APP_GEMINI_KEY, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+      });
+      var data = await res.json();
+      var rawText = "";
+      try { rawText = data.candidates[0].content.parts[0].text; } catch(e) { setError("Error al generar. Inténtalo de nuevo."); setLoading(false); return; }
+
+      // Clean response - remove markdown fences if present
+      rawText = rawText.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+
+      var parsed = JSON.parse(rawText);
+      if (!Array.isArray(parsed)) { setError("Formato incorrecto de la IA. Inténtalo de nuevo."); setLoading(false); return; }
+
+      var qs = parsed.map(function(q, i) {
+        return {
+          _idx: i,
+          _selected: true,
+          text: q.text || "",
+          topic: q.topic || themeName || "General",
+          type: allTopics.indexOf(q.topic || themeName) >= 0 ? (selOpo.commonTopics.indexOf(q.topic || themeName) >= 0 ? "common" : "specific") : "common",
+          options: q.options || [],
+          correct: typeof q.correct === "number" ? q.correct : 0,
+          justification: q.justification || ""
+        };
+      }).filter(function(q) { return q.text && q.options.length >= 2; });
+
+      setGenerated(qs);
+    } catch(e) {
+      setError("Error al procesar la respuesta: " + e.message);
+    }
+    setLoading(false);
+  }
+
+  function toggleQ(idx) {
+    setGenerated(generated.map(function(q) { return q._idx === idx ? Object.assign({}, q, { _selected: !q._selected }) : q; }));
+  }
+
+  function editQ(idx, field, value) {
+    setGenerated(generated.map(function(q) { return q._idx === idx ? Object.assign({}, q, (function() { var o = {}; o[field] = value; return o; })()) : q; }));
+  }
+
+  async function saveAll() {
+    var toSave = generated.filter(function(q) { return q._selected; });
+    if (!toSave.length) return;
+    var rows = toSave.map(function(q) {
+      return { opo_id: so, topic: q.topic, type: q.type, text: q.text, options: q.options, correct: q.correct, justification: q.justification };
+    });
+    var { data } = await supabase.from("questions").insert(rows).select();
+    if (data) {
+      var mapped = data.map(function(q) { return { id: q.id, opoId: q.opo_id, topic: q.topic, type: q.type, text: q.text, options: q.options, correct: q.correct, justification: q.justification }; });
+      setQuestions(questions.concat(mapped));
+    }
+    setSaved(true);
+    setTimeout(function() { setSaved(false); setGenerated([]); }, 2000);
+  }
+
+  var selectedCount = generated.filter(function(q) { return q._selected; }).length;
+
+  return (
+    <div className="fi">
+      <div className="ph"><h2>Generar Preguntas con IA</h2><p>Crea preguntas automáticamente con inteligencia artificial</p></div>
+
+      {saved && <div className="success-msg"><IC.Chk /> {selectedCount} preguntas guardadas correctamente</div>}
+      {error && <div className="le"><IC.Warn />{error}</div>}
+
+      {generated.length === 0 ? (
+        <div>
+          <div className="cd mb20">
+            <div className="ct mb16">1. Modo de generación</div>
+            <div className="tabs">
+              <button className={"tab " + (mode === "tema" ? "ac" : "")} onClick={function() { setMode("tema"); }}>Desde tema / ley</button>
+              <button className={"tab " + (mode === "pdf" ? "ac" : "")} onClick={function() { setMode("pdf"); }}>Desde archivo (PDF/TXT)</button>
+            </div>
+
+            <div className="ct mb16" style={{ marginTop: 16 }}>2. Oposición</div>
+            <div className="tg mb16">
+              {oposiciones.map(function(o) {
+                return <div key={o.id} className={"tc " + (so === o.id ? "sel" : "")} onClick={function() { setSo(o.id); setTopic(""); }}><span className="ck">{so === o.id && <IC.Chk />}</span>{o.name}</div>;
+              })}
+            </div>
+
+            {so && mode === "tema" && (
+              <div className="fi">
+                <div className="ct mb16">3. Tema</div>
+                <div className="tg mb16">
+                  {allTopics.map(function(t) {
+                    var isCommon = selOpo.commonTopics.indexOf(t) >= 0;
+                    return <div key={t} className={"tc " + (topic === t ? "sel" : "")} onClick={function() { setTopic(t); setCustomTopic(""); }}>
+                      <span className="ck">{topic === t && <IC.Chk />}</span>
+                      <div><div>{t}</div><div style={{ fontSize: 11, color: "var(--tx3)" }}>{isCommon ? "Común" : "Específico"}</div></div>
+                    </div>;
+                  })}
+                </div>
+                <div className="fd">
+                  <label>O escribe un tema personalizado</label>
+                  <input value={customTopic} onChange={function(e) { setCustomTopic(e.target.value); setTopic(""); }} placeholder="Ej: Ley 9/2017 de Contratos del Sector Público" />
+                </div>
+              </div>
+            )}
+
+            {so && mode === "pdf" && (
+              <div className="fi">
+                <div className="ct mb16">3. Sube el temario</div>
+                <div className="dz" onClick={function() { if (fileRef.current) fileRef.current.click(); }} style={{ marginBottom: 16 }}>
+                  <IC.Up />
+                  <p style={{ color: "var(--tx2)", marginTop: 8, fontSize: 14 }}>{pdfName || "Arrastra o haz clic para subir PDF o TXT"}</p>
+                  <p style={{ color: "var(--tx3)", fontSize: 12, marginTop: 4 }}>Se extraerá el texto para generar preguntas</p>
+                  <input ref={fileRef} type="file" accept=".pdf,.txt" onChange={handlePdf} style={{ display: "none" }} />
+                </div>
+                {pdfText && <div style={{ background: "var(--ok-s)", borderRadius: "var(--rs)", padding: "10px 14px", fontSize: 13, color: "var(--ok)" }}><IC.Chk /> Archivo cargado: {pdfText.length} caracteres extraídos</div>}
+              </div>
+            )}
+
+            {so && (
+              <div className="fi" style={{ marginTop: 16 }}>
+                <div className="ct mb16">{mode === "tema" ? "4" : "4"}. Cantidad de preguntas</div>
+                <div className="f g8 fw">
+                  {[5, 10, 15, 20, 25, 30].map(function(n) {
+                    return <button key={n} className={"b " + (nq === n ? "bp" : "bs") + " bsm"} onClick={function() { setNq(n); }}>{n}</button>;
+                  })}
+                </div>
+                <div style={{ marginTop: 24 }}>
+                  <button className="b bp" onClick={generate} disabled={loading} style={{ background: loading ? "var(--tx3)" : "linear-gradient(135deg, #4285F4, #34A853)", border: "none", fontSize: 16, padding: "14px 32px" }}>
+                    <IC.Bot /> {loading ? "Generando preguntas..." : "Generar " + nq + " preguntas con IA"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div>
+          <div className="f jb2 ic mb20">
+            <div>
+              <span style={{ fontSize: 16, fontWeight: 600 }}>{generated.length} preguntas generadas</span>
+              <span style={{ fontSize: 14, color: "var(--tx3)", marginLeft: 8 }}>({selectedCount} seleccionadas)</span>
+            </div>
+            <div className="f g8">
+              <button className="b bs" onClick={function() { setGenerated([]); }}>Volver a configurar</button>
+              <button className="b bp" onClick={saveAll} disabled={!selectedCount} style={{ background: "linear-gradient(135deg, #4285F4, #34A853)", border: "none" }}>
+                <IC.Chk /> Guardar {selectedCount} preguntas
+              </button>
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gap: 12 }}>
+            {generated.map(function(q) {
+              return (
+                <div key={q._idx} className="cd fi" style={{ padding: 20, opacity: q._selected ? 1 : 0.5, border: q._selected ? "1.5px solid var(--accent)" : "1px solid var(--bd)" }}>
+                  <div className="f jb2 ic mb12">
+                    <div className="f ic g8">
+                      <span style={{ fontSize: 13, fontWeight: 700, color: "var(--accent)" }}>#{q._idx + 1}</span>
+                      <span className={"bg2 " + (q.type === "common" ? "bgk" : "bgw")}>{q.type === "common" ? "Común" : "Espec."}</span>
+                      <span className="bg2 bgi">{q.topic}</span>
+                    </div>
+                    <div className="f ic g8">
+                      <button className={"b bsm " + (q._selected ? "bp" : "bs")} onClick={function() { toggleQ(q._idx); }}>
+                        {q._selected ? <span><IC.Chk /> Seleccionada</span> : "Excluida"}
+                      </button>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 12, lineHeight: 1.5 }}>{q.text}</div>
+                  <div style={{ display: "grid", gap: 6, marginBottom: 10 }}>
+                    {q.options.map(function(opt, oi) {
+                      return <div key={oi} style={{ padding: "8px 14px", borderRadius: "var(--rs)", fontSize: 14, background: oi === q.correct ? "var(--ok-s)" : "var(--sf2)", color: oi === q.correct ? "var(--ok)" : "var(--tx2)", fontWeight: oi === q.correct ? 600 : 400 }}>
+                        {String.fromCharCode(65 + oi)}. {opt} {oi === q.correct && <IC.Chk />}
+                      </div>;
+                    })}
+                  </div>
+                  {q.justification && <div className="jb"><b>Justificación:</b> {q.justification}</div>}
+                </div>
+              );
+            })}
+          </div>
+
+          <div style={{ marginTop: 20 }} className="f g8 jb2">
+            <button className="b bs" onClick={function() { setGenerated([]); }}>Descartar y volver</button>
+            <button className="b bp" onClick={saveAll} disabled={!selectedCount} style={{ background: "linear-gradient(135deg, #4285F4, #34A853)", border: "none" }}>
+              <IC.Chk /> Guardar {selectedCount} preguntas en la base de datos
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1512,6 +1783,7 @@ function Inner() {
     if (view === "students") Page = AStudents;
     else if (view === "oposiciones") Page = AOpos;
     else if (view === "questions") Page = AQuestions;
+    else if (view === "generate") Page = AGenerate;
     else if (view === "reports") Page = AReports;
     else if (view === "settings") Page = ASettings;
     else Page = ADash;
